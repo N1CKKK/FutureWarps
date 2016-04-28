@@ -1,0 +1,377 @@
+// Classe main
+
+package Warp;
+
+import org.bukkit.Bukkit;
+
+import org.bukkit.command.ConsoleCommandSender;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.plugin.java.JavaPlugin;
+
+import Eventos.Warping;
+import Eventos.DefineWarping;
+import Eventos.deleteWarping;
+import Variables.Warps;
+
+public class Main
+  extends JavaPlugin
+{
+  public static Main plugin;
+  public static FileConfiguration config = null;
+  Warps warp = Warps.getInstance();
+  
+  public void onEnable()
+  {
+    ConsoleCommandSender s = Bukkit.getConsoleSender();
+    s.sendMessage("                                    ");
+    s.sendMessage("              §3FutureCraft     ");
+    s.sendMessage("        §3 FutureWarp: §2[Ativado]");
+    s.sendMessage("       §3Desenvolvido por §7N1CKK_      ");
+    s.sendMessage("                                    ");
+    Bukkit.getPluginManager().registerEvents(new Warping(), this);
+    getCommand("setwarp").setExecutor(new DefineWarping());
+    getCommand("delwarp").setExecutor(new deleteWarping());
+    plugin = this;
+    config = getConfig();
+    this.warp.setup(this);
+    config.options().copyDefaults(true);
+    saveDefaultConfig();
+  }
+  
+  public void onDisable()
+  {
+    ConsoleCommandSender s = Bukkit.getConsoleSender();
+    s.sendMessage("                                    ");
+    s.sendMessage("             §3FutureCraft      ");
+    s.sendMessage("      §7 FutureWarp: §c[Desativado]");
+    s.sendMessage("          §6Plugin Desligado!      ");
+    s.sendMessage("                                    ");
+  }
+}
+
+
+// Classe Warps
+
+package Variables;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.logging.Logger;
+import org.bukkit.Bukkit;
+import org.bukkit.Server;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.FileConfigurationOptions;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.PluginDescriptionFile;
+
+public class Warps
+{
+  static Warps instance = new Warps();
+  Plugin p;
+  FileConfiguration config;
+  File cfile;
+  FileConfiguration Warps;
+  File dfile;
+  
+  public static Warps getInstance()
+  {
+    return instance;
+  }
+  
+  public void setup(Plugin p)
+  {
+    this.cfile = new File(p.getDataFolder(), "config.yml");
+    this.config = p.getConfig();
+    this.config.options().copyDefaults(true);
+    saveConfig();
+    if (!p.getDataFolder().exists()) {
+      p.getDataFolder().mkdir();
+    }
+    this.dfile = new File(p.getDataFolder(), "Warps.yml");
+    if (!this.dfile.exists()) {
+      try
+      {
+        this.dfile.createNewFile();
+      }
+      catch (IOException e)
+      {
+        Bukkit.getServer().getLogger().severe("Falha ao criar a Warps.yml!");
+      }
+    }
+    this.Warps = YamlConfiguration.loadConfiguration(this.dfile);
+  }
+  
+  public FileConfiguration getWarps()
+  {
+    return this.Warps;
+  }
+  
+  public void saveWarps()
+  {
+    try
+    {
+      this.Warps.save(this.dfile);
+    }
+    catch (IOException e)
+    {
+      Bukkit.getServer().getLogger().severe("Falha ao salvar Warps.yml!");
+    }
+  }
+  
+  public void reloadData()
+  {
+    this.Warps = YamlConfiguration.loadConfiguration(this.dfile);
+  }
+  
+  public FileConfiguration getConfig()
+  {
+    return this.config;
+  }
+  
+  public void saveConfig()
+  {
+    try
+    {
+      this.config.save(this.cfile);
+    }
+    catch (IOException e)
+    {
+      Bukkit.getServer().getLogger().severe("Nao foi possivel salvar a config.yml!");
+    }
+  }
+  
+  public void reloadConfig()
+  {
+    this.config = YamlConfiguration.loadConfiguration(this.cfile);
+  }
+  
+  public PluginDescriptionFile getDesc()
+  {
+    return this.p.getDescription();
+  }
+}
+
+// Classe Warping
+
+package Eventos;
+
+import java.util.ArrayList;
+import Warp.Main;
+import Variables.Warps;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.Server;
+import org.bukkit.World;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.scheduler.BukkitScheduler;
+
+public class Warping
+  implements Listener
+{
+  Warps warp = Warps.getInstance();
+  ArrayList<String> teleportando = new ArrayList();
+  
+  @EventHandler
+  public void warping(PlayerCommandPreprocessEvent e)
+  {
+    final String m = e.getMessage().toLowerCase().replace("/", "");
+    final Player p = e.getPlayer();
+    if (this.warp.getWarps().getConfigurationSection(m) == null) {
+      return;
+    }
+    e.setCancelled(true);
+    if (!(p.hasPermission("futurecraft.warp." + m) || ((p.hasPermission("futurecraft.warp.*")))))
+    {
+      p.sendMessage(Main.config.getString("Mensagens.Sem-Perm").replaceAll("&", "§").replace("{warp}", m));
+      return;
+    }
+    if (Main.config.getBoolean("Sistema.Delay.Ativar"))
+    {
+      if (p.hasPermission("futurecraft.delay.livre"))
+      {
+        World w = Bukkit.getServer().getWorld(this.warp.getWarps().getConfigurationSection(m).getString("Mundo"));
+        double x = this.warp.getWarps().getConfigurationSection(m).getDouble("x");
+        double y = this.warp.getWarps().getConfigurationSection(m).getDouble("y");
+        double z = this.warp.getWarps().getConfigurationSection(m).getDouble("z");
+        float yaw = (float)this.warp.getWarps().getConfigurationSection(m).getDouble("yaw");
+        float pitch = (float)this.warp.getWarps().getConfigurationSection(m).getDouble("pitch");
+        p.teleport(new Location(w, x, y, z, yaw, pitch));
+        p.sendMessage(Main.config.getString("Mensagens.Teleportado").replaceAll("&", "§").replace("{warp}", m));
+        return;
+      }
+      String tempo = Main.config.getString("Sistema.Delay.Tempo");
+      this.teleportando.add(p.getName());
+      p.sendMessage(Main.config.getString("Mensagens.Sera-Teleportado").replaceAll("&", "§").replace("{tempo}", tempo));
+      Bukkit.getScheduler().scheduleSyncDelayedTask(Main.plugin, new Runnable()
+      {
+        public void run()
+        {
+          if (Warping.this.teleportando.contains(p.getName()))
+          {
+            World w = Bukkit.getServer().getWorld(Warping.this.warp.getWarps().getConfigurationSection(m).getString("Mundo"));
+            double x = Warping.this.warp.getWarps().getConfigurationSection(m).getDouble("x");
+            double y = Warping.this.warp.getWarps().getConfigurationSection(m).getDouble("y");
+            double z = Warping.this.warp.getWarps().getConfigurationSection(m).getDouble("z");
+            float yaw = (float)Warping.this.warp.getWarps().getConfigurationSection(m).getDouble("yaw");
+            float pitch = (float)Warping.this.warp.getWarps().getConfigurationSection(m).getDouble("pitch");
+            p.teleport(new Location(w, x, y, z, yaw, pitch));
+            Warping.this.teleportando.remove(p.getName());
+            p.sendMessage(Main.config.getString("Mensagens.Teleportado").replaceAll("&", "§").replace("{warp}", m));
+          }
+        }
+      }, Main.config.getInt("Sistema.Delay.Tempo") * 20);
+    }
+    if (!Main.config.getBoolean("Sistema.Delay.Ativar"))
+    {
+      World w = Bukkit.getServer().getWorld(this.warp.getWarps().getConfigurationSection(m).getString("Mundo"));
+      double x = this.warp.getWarps().getConfigurationSection(m).getDouble("x");
+      double y = this.warp.getWarps().getConfigurationSection(m).getDouble("y");
+      double z = this.warp.getWarps().getConfigurationSection(m).getDouble("z");
+      float yaw = (float)this.warp.getWarps().getConfigurationSection(m).getDouble("yaw");
+      float pitch = (float)this.warp.getWarps().getConfigurationSection(m).getDouble("pitch");
+      p.teleport(new Location(w, x, y, z, yaw, pitch));
+      p.sendMessage(Main.config.getString("Mensagens.Teleportado").replaceAll("&", "§".replace("{warp}", m));
+      return;
+    }
+  }
+  
+  @EventHandler
+  public void levarDano(EntityDamageByEntityEvent e)
+  {
+    if (((e.getEntity() instanceof Player)) && ((e.getDamager() instanceof Player)))
+    {
+      Player p = (Player)e.getEntity();
+      if ((Main.config.getBoolean("Sistema.Delay.Cancelar-ao-levar-dano")) && 
+        (this.teleportando.contains(p.getName())))
+      {
+        p.sendMessage(Main.config.getString("Mensagens.Cancelado").replaceAll("&", "§"));
+        this.teleportando.remove(p.getName());
+      }
+    }
+  }
+}
+
+// Classe DeleteWarping
+
+package Eventos;
+
+
+import Variables.Warps;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.entity.Player;
+
+public class deleteWarping 
+	implements CommandExecutor
+	{
+	  Warps warp = Warps.getInstance();
+	
+	  public boolean onCommand(CommandSender sender, Command cmd, String commandLabel, String[] args)
+	  {
+	    if (!(sender instanceof Player))
+	    {
+	      sender.sendMessage("§cComando Liberado Apenas Para Jogadores!");
+	      return true;
+	    }
+	    if (cmd.getName().equalsIgnoreCase("delwarp"))
+	    {
+	      Player p = (Player)sender;
+	      if (!p.hasPermission("futureCraft.cmd.delwarp"))
+	      {
+	        p.sendMessage("§c[FutureCraft]Voce nao Tem Permissao!");
+	        return true;
+	      }
+	      if (args.length == 0)
+	      {
+	        p.sendMessage("§aUso correto: /delwarp <Nome>");
+	        return true;
+	      }
+	      if (args.length > 1)
+	      {
+	        p.sendMessage("§aUso correto: /delwarp <Nome>");
+	        return true;
+	      }
+	      if (this.warp.getWarps().getConfigurationSection(args[0]) == null)
+	      {
+	        p.sendMessage("§cEsse §aWARP §cNao Existe Verifique o nome e Tente Novamente :)");
+	        return true;
+	      }
+	      if (this.warp.getWarps().getConfigurationSection(args[0]) != null)
+	      {
+	        this.warp.getWarps().set(args[0], null);
+	        p.sendMessage("§c[FreeCraft]§aWarp §6" + args[0] + " §aWarp Removida com Sucesso!");
+	        this.warp.saveWarps();
+	        return true;
+	      }
+	    }
+	    return false;
+	  }
+	}
+
+// Classe DefineWarping
+
+package Eventos;
+
+import Variables.Warps;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.entity.Player;
+
+
+public class DefineWarping 
+	implements CommandExecutor
+	{
+	 Warps warp = Warps.getInstance();
+	  
+	  public boolean onCommand(CommandSender sender, Command cmd, String commandLabel, String[] args)
+	  {
+	    if (!(sender instanceof Player))
+	    {
+	      sender.sendMessage("§cComando Liberado Apenas Para Jogadores!");
+	      return true;
+	    }
+	    if (cmd.getName().equalsIgnoreCase("setwarp"))
+	    {
+	      Player p = (Player)sender;
+	      if (!p.hasPermission("freecraft.cmd.setwarp"))
+	      {
+	        p.sendMessage("§c[FutureCraft]Voce nao Tem Permissao!");
+	        return true;
+	      }
+	      if (args.length == 0)
+	      {
+	        p.sendMessage("§aUso correto: /setwarp <Nome>");
+	        return true;
+	      }
+	      if (args.length > 1)
+	      {
+	        p.sendMessage("§aUso correto: /setwarp <Nome>");
+	        return true;
+	      }
+	      this.warp.getWarps().set(args[0].toLowerCase() + ".Mundo", p.getLocation().getWorld().getName());
+	      this.warp.getWarps().set(args[0].toLowerCase() + ".x", Double.valueOf(p.getLocation().getX()));
+	      this.warp.getWarps().set(args[0].toLowerCase() + ".y", Double.valueOf(p.getLocation().getY()));
+	      this.warp.getWarps().set(args[0].toLowerCase() + ".z", Double.valueOf(p.getLocation().getZ()));
+	      this.warp.getWarps().set(args[0].toLowerCase() + ".yaw", Float.valueOf(p.getLocation().getYaw()));
+	      this.warp.getWarps().set(args[0].toLowerCase() + ".pitch", Float.valueOf(p.getLocation().getPitch()));
+	      this.warp.saveWarps();
+	      p.sendMessage("§aWarp §6" + args[0] + " §aCriada com Sucesso!");
+	    }
+	    return false;
+	  }
+	}
+
+
